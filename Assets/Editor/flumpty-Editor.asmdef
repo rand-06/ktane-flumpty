@@ -1,0 +1,10 @@
+{
+  "name": "flumpty-Editor",
+  "references": [
+    "flumpty"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": []
+}

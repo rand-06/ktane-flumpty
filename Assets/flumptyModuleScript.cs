@@ -5,6 +5,18 @@ using UnityEngine;
 
 public class flumptyModuleScript : MonoBehaviour
 {
+	public class ModuleComparer<T>: IComparer<T>
+		where T: KMBombModule
+	{
+		int sortParam;
+		ModuleComparer<T>(int sortParam){
+			this.sortParam = sortParam;
+		}
+		public int Compare(T x, T y){ // if x > y: return +; x < y: return -;
+
+		}
+	} 
+
 	public KMBombInfo bombInfo;
 	public TextMesh centerText, IdText, IdNumberText;
 	public GameObject blankPrefab;
@@ -19,10 +31,14 @@ public class flumptyModuleScript : MonoBehaviour
 	private List<KMBombModule> allSolved = new List<KMBombModule>(), remainingSolvables = new List<KMBombModule>();
 	private static readonly string base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-	private bool mustInvert = false;
+	private bool mustInvert;
+	private int pointer = 0;
+	private List<KMBombModule> currentActive = new List<KMBombModule>{GetComponent<KMBombModule>()};
+	private KMBombModule currentPosition = GetComponent<KMBombModule>();
 	
 	void Awake()
 	{
+		mustInvert = GetComponent<KMBombInfo>().GetSerialNumberNumbers().LastOrDefault() % 2 == 1;
 		ModuleID = ++ModuleIDCounter;
 		if (bombInfo != previousBombInfo)
 		{
@@ -78,8 +94,33 @@ public class flumptyModuleScript : MonoBehaviour
 		}
 	}
 
-	string moduleNameToCompatible(string name) => name.ToUpperInvariant().Where(c => base36.Contains(c)).Aggregate("", (a, b) => a + b);
+	string getSequenceSnippet(int amount){
+		string ans = getSequenceSnippet(currentActive, pointer, amount);
+		pointer += amount;
+		return ans;
+	}
 
+	void attack(){}
+	void move(int sortParam, bool reverseOrder, int moveAmount){
+
+	}
+
+	void startStage(){
+		string first3 = getSequenceSnippet(3);
+		if (first3 = "111"){
+			bool invert = getSequenceSnippet(1)=="0";
+			if (invert) mustInvert = !mustInvert;
+			else attack();
+		}
+		else {
+			bool reverseOrder = getSequenceSnippet(1)=="1";
+			int moveAmount = convertFromBinary(getSequenceSnippet(3));
+			move(convertFromBinary(first3), reverseOrder, moveAmount);
+		}
+	}
+
+	int convertFromBinary(string bin) => bin.ToCharArray().Reverse().Select((x,i)=>x=='1'?1<<i:0).Sum();
+	string moduleNameToCompatible(string name) => name.ToUpperInvariant().Where(c => base36.Contains(c)).Aggregate("", (a, b) => a + b);
 	bool xorChars(List<char> list) => list.Count(x => x == '1') % 2 == 1;
 	
 	string getSequenceSnippet(List<string> moduleNames, int startIndex, int count)

@@ -21,12 +21,13 @@ public class flumptyModuleInfo
     public int date;
     public int tpScore;
     
-    public flumptyModuleInfo(string id, string name, int date, int tpScore)
+    public flumptyModuleInfo(string id, string name, int date, int tpScore, int timeModeScore)
     {
         this.id = id;
         this.name = name;
         this.date = date;
         this.tpScore = tpScore;
+        this.timeModeScore = timeModeScore;
     }
 }
 
@@ -109,7 +110,8 @@ public class flumptyServiceScript : MonoBehaviour { // успешно спизд
                     module["ModuleID"].Value<string>(), 
                     module["Name"].Value<string>(), 
                     int.Parse(module["Published"].Value<string>().Replace("-","")),
-                    module["TwitchPlays"] == null? 0: module["TwitchPlays"]["Score"].Value<int>()));
+                    module["TwitchPlays"] == null? 0: module["TwitchPlays"]["Score"].Value<int>(),
+                    module["TimeMode"] == null? 0: module["TimeMode"]["Score"].Value<int>()));
                 print("[flumptyService] Found module: " + module["Name"].Value<string>() + " ("+ module["ModuleID"].Value<string>()+")");
             }
 

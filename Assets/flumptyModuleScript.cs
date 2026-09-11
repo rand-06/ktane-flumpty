@@ -12,8 +12,32 @@ public class flumptyModuleScript : MonoBehaviour
 		ModuleComparer<T>(int sortParam){
 			this.sortParam = sortParam;
 		}
-		public int Compare(T x, T y){ // if x > y: return +; x < y: return -;
+		private int CompareInit(T x, T y){ // if x > y: return +; x < y: return -;
+			switch(sortParam){
+				case 0: return allSolved.IndexOf(x) - allSolved.IndexOf(y);
+				case 1: return string.Compare(
+				moduleNameToCompatible(x.ModuleDisplayName),
+				moduleNameToCompatible(y.ModuleDisplayName));
+				case 2: return string.Compare(
+					moduleInfos.First(z => z.id == x.ModuleID).date,
+					moduleInfos.First(z => z.id == y.ModuleID).date);
+				case 3: return moduleInfos.First(z => z.id == x.ModuleID).timeModeScore -
+							   moduleInfos.First(z => z.id == y.ModuleID).timeModeScore;
+				case 4: return moduleInfos.First(z => z.id == x.ModuleID).tpScore -
+							   moduleInfos.First(z => z.id == y.ModuleID).tpScore;
+				case 5: return string.Compare(
+				moduleNameToCompatible(x.ModuleDisplayName).ToCharArray().Reverse().Select(x=>x.ToString()).Aggregate("",(a,b)=>a+b),
+				moduleNameToCompatible(y.ModuleDisplayName).ToCharArray().Reverse().Select(x=>x.ToString()).Aggregate("",(a,b)=>a+b));
+				case 6: return string.Compare(
+				moduleNameToCompatible(x.ModuleID),
+				moduleNameToCompatible(y.ModuleID));
+				default: return 0;
+			}
+		}
 
+		public int Compare(T x, T y){
+			int ans = CompareInit(x,y);
+			return ans==0?new ModuleComparer<T>((sortParam+1)%7).Compare(x,y):ans;
 		}
 	} 
 
@@ -94,6 +118,19 @@ public class flumptyModuleScript : MonoBehaviour
 		}
 	}
 
+	public void onPressHidden(Transform blankTransform){
+		KMBombModule pressed = transformDictionary.FirstOrDefault(x => x.Value == blankTransform).Key;
+		if (pressed ==  currentPosition){
+			GetComponent<KMBombModule>().HandlePass();
+		}
+		else {
+			GetComponent<KMBombModule>().HandleStrike();
+			enterRecoveryMode();
+		}
+	}
+
+	void enterRecoveryMode(){};
+
 	string getSequenceSnippet(int amount){
 		string ans = getSequenceSnippet(currentActive, pointer, amount);
 		pointer += amount;
@@ -102,7 +139,11 @@ public class flumptyModuleScript : MonoBehaviour
 
 	void attack(){}
 	void move(int sortParam, bool reverseOrder, int moveAmount){
-
+		List<KMBombModule> sorted = currentActive.OrderBy(x => x, new ModuleComparer<KMBombModule>(sortParam));
+		if (reverseOrder) sorted = sorted.Reverse().ToList();
+		int currentIndex = sorted.IndexOf(currentPosition);
+		currentIndex = (currentIndex + moveAmount)%(sorted.Count);
+		currentPosition = sorted[currentIndex];
 	}
 
 	void startStage(){
@@ -114,13 +155,16 @@ public class flumptyModuleScript : MonoBehaviour
 		}
 		else {
 			bool reverseOrder = getSequenceSnippet(1)=="1";
-			int moveAmount = convertFromBinary(getSequenceSnippet(3));
+			int moveAmount = convertFromBinary(getSequenceSnippet(3)) + 1;
 			move(convertFromBinary(first3), reverseOrder, moveAmount);
 		}
 	}
 
 	int convertFromBinary(string bin) => bin.ToCharArray().Reverse().Select((x,i)=>x=='1'?1<<i:0).Sum();
-	string moduleNameToCompatible(string name) => name.ToUpperInvariant().Where(c => base36.Contains(c)).Aggregate("", (a, b) => a + b);
+	string moduleNameToCompatible(string name) {
+		string ans = name.ToUpperInvariant().Where(c => base36.Contains(c)).Aggregate("", (a, b) => a + b);
+		return ans == ""?"0":ans;
+		}
 	bool xorChars(List<char> list) => list.Count(x => x == '1') % 2 == 1;
 	
 	string getSequenceSnippet(List<string> moduleNames, int startIndex, int count)

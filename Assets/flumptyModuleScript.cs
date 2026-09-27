@@ -1,43 +1,48 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using KModkit;
 using UnityEngine;
 
 public class flumptyModuleScript : MonoBehaviour
 {
-	public class ModuleComparer<T>: IComparer<T>
+	private class ModuleComparer<T>: IComparer<T>
 		where T: KMBombModule
 	{
-		int sortParam;
-		ModuleComparer<T>(int sortParam){
+		private readonly int sortParam;
+		private readonly List<KMBombModule> solvedQueue;
+		public ModuleComparer(int sortParam, List<KMBombModule> solvedQueue){
 			this.sortParam = sortParam;
+			this.solvedQueue = solvedQueue;
 		}
 		private int CompareInit(T x, T y){ // if x > y: return +; x < y: return -;
 			switch(sortParam){
-				case 0: return allSolved.IndexOf(x) - allSolved.IndexOf(y);
+				case 0: return solvedQueue.IndexOf(x) - solvedQueue.IndexOf(y);
 				case 1: return string.Compare(
 				moduleNameToCompatible(x.ModuleDisplayName),
-				moduleNameToCompatible(y.ModuleDisplayName));
+				moduleNameToCompatible(y.ModuleDisplayName), StringComparison.InvariantCulture);
 				case 2: return string.Compare(
-					moduleInfos.First(z => z.id == x.ModuleID).date,
-					moduleInfos.First(z => z.id == y.ModuleID).date);
-				case 3: return moduleInfos.First(z => z.id == x.ModuleID).timeModeScore -
-							   moduleInfos.First(z => z.id == y.ModuleID).timeModeScore;
-				case 4: return moduleInfos.First(z => z.id == x.ModuleID).tpScore -
-							   moduleInfos.First(z => z.id == y.ModuleID).tpScore;
+					moduleInfos.First(z => z.id == x.ModuleType).date.ToString(),
+					moduleInfos.First(z => z.id == y.ModuleType).date.ToString(), StringComparison.InvariantCulture);
+				case 3: return moduleNameToCompatible(moduleInfos.First(z => z.id == x.ModuleType).name).Length -
+				               moduleNameToCompatible(moduleInfos.First(z => z.id == y.ModuleType).name).Length;
+				case 4: return moduleInfos.First(z => z.id == x.ModuleType).tpScore -
+							   moduleInfos.First(z => z.id == y.ModuleType).tpScore;
 				case 5: return string.Compare(
-				moduleNameToCompatible(x.ModuleDisplayName).ToCharArray().Reverse().Select(x=>x.ToString()).Aggregate("",(a,b)=>a+b),
-				moduleNameToCompatible(y.ModuleDisplayName).ToCharArray().Reverse().Select(x=>x.ToString()).Aggregate("",(a,b)=>a+b));
+				moduleNameToCompatible(x.ModuleDisplayName).ToCharArray().Reverse().Select(x0=>x.ToString()).Aggregate("",(a,b)=>a+b),
+				moduleNameToCompatible(y.ModuleDisplayName).ToCharArray().Reverse().Select(x0=>x.ToString()).Aggregate("",(a,b)=>a+b), StringComparison.InvariantCulture);
 				case 6: return string.Compare(
-				moduleNameToCompatible(x.ModuleID),
-				moduleNameToCompatible(y.ModuleID));
+					moduleNameToCompatible(moduleInfos.First(z => z.id == x.ModuleType).ptSymbol),
+					moduleNameToCompatible(moduleInfos.First(z => z.id == y.ModuleType).ptSymbol), StringComparison.InvariantCulture);
 				default: return 0;
 			}
 		}
 
 		public int Compare(T x, T y){
 			int ans = CompareInit(x,y);
-			return ans==0?new ModuleComparer<T>((sortParam+1)%7).Compare(x,y):ans;
+			return ans==0?new ModuleComparer<T>((sortParam+1)%7, solvedQueue).Compare(x,y):ans;
 		}
 	} 
 
@@ -52,17 +57,22 @@ public class flumptyModuleScript : MonoBehaviour
 
 	private Dictionary<KMBombModule, Transform> transformDictionary = new Dictionary<KMBombModule, Transform>();
 
-	private List<KMBombModule> allSolved = new List<KMBombModule>(), remainingSolvables = new List<KMBombModule>();
+	private List<KMBombModule> allSolved = new List<KMBombModule>();
 	private static readonly string base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 	private bool mustInvert;
 	private int pointer = 0;
-	private List<KMBombModule> currentActive = new List<KMBombModule>{GetComponent<KMBombModule>()};
-	private KMBombModule currentPosition = GetComponent<KMBombModule>();
+	private List<KMBombModule> currentActive;
+	private KMBombModule currentPosition;
+	public KMBombInfo BombInfo;
+
+	private int stageNumber;
+	private bool underAttack;
+	
+	void log(string msg){print($"[Flumpty #{ModuleID}] {msg}");}
 	
 	void Awake()
 	{
-		mustInvert = GetComponent<KMBombInfo>().GetSerialNumberNumbers().LastOrDefault() % 2 == 1;
 		ModuleID = ++ModuleIDCounter;
 		if (bombInfo != previousBombInfo)
 		{
@@ -74,6 +84,9 @@ public class flumptyModuleScript : MonoBehaviour
 	
 	void Start ()
 	{
+		mustInvert = BombInfo.GetSerialNumberNumbers().LastOrDefault() % 2 == 1;
+		currentActive = new List<KMBombModule>{GetComponent<KMBombModule>()};
+		currentPosition = GetComponent<KMBombModule>();
 		moduleInfos = flumptyServiceScript.getModuleInfo();
 		centerText.text = moduleInfos == null ? "NULL" : moduleInfos.PickRandom().name;
 		IdNumberText.text = InternalID.ToString();
@@ -82,6 +95,19 @@ public class flumptyModuleScript : MonoBehaviour
 		StartCoroutine(prepareHiddenMods());
 	}
 
+	IEnumerator flashModule(KMBombModule module)
+	{
+		while (true)
+		{
+			module.gameObject.transform.localScale = new Vector3(0, 0, 0);
+			transformDictionary[module].localScale = new Vector3(1, 1, 1);
+			yield return new WaitForSeconds(0.5f);
+			module.gameObject.transform.localScale = new Vector3(1, 1, 1);
+			transformDictionary[module].localScale = new Vector3(0, 0, 0);
+			yield return new WaitForSeconds(0.5f);
+		}
+	}
+	
 	IEnumerator prepareHiddenMods()
 	{
 		yield return null;
@@ -120,8 +146,9 @@ public class flumptyModuleScript : MonoBehaviour
 
 	public void onPressHidden(Transform blankTransform){
 		KMBombModule pressed = transformDictionary.FirstOrDefault(x => x.Value == blankTransform).Key;
-		if (pressed ==  currentPosition){
+		if (pressed == currentPosition){
 			GetComponent<KMBombModule>().HandlePass();
+			foreach (KMBombModule module in currentActive) showModule(module);
 		}
 		else {
 			GetComponent<KMBombModule>().HandleStrike();
@@ -129,26 +156,34 @@ public class flumptyModuleScript : MonoBehaviour
 		}
 	}
 
-	void enterRecoveryMode(){};
+	void enterRecoveryMode(){}
 
 	string getSequenceSnippet(int amount){
-		string ans = getSequenceSnippet(currentActive, pointer, amount);
+		string ans = getSequenceSnippet(currentActive.Select(x => x.ModuleDisplayName).ToList(), pointer, amount);
 		pointer += amount;
 		return ans;
 	}
 
-	void attack(){}
+	void attack()
+	{
+		underAttack = true;
+	}
 	void move(int sortParam, bool reverseOrder, int moveAmount){
-		List<KMBombModule> sorted = currentActive.OrderBy(x => x, new ModuleComparer<KMBombModule>(sortParam));
-		if (reverseOrder) sorted = sorted.Reverse().ToList();
+		List<KMBombModule> sorted = currentActive.OrderBy(x => x, new ModuleComparer<KMBombModule>(sortParam, allSolved)).ToList();
+		if (reverseOrder) sorted = sorted.AsEnumerable().Reverse().ToList();
 		int currentIndex = sorted.IndexOf(currentPosition);
 		currentIndex = (currentIndex + moveAmount)%(sorted.Count);
 		currentPosition = sorted[currentIndex];
 	}
 
-	void startStage(){
+	void startStage(KMBombModule solvedModule)
+	{
+		stageNumber++;
+		allSolved.Add(solvedModule);
+		hideModule(solvedModule);
+		if (stageNumber < 5) return;
 		string first3 = getSequenceSnippet(3);
-		if (first3 = "111"){
+		if (first3 == "111"){
 			bool invert = getSequenceSnippet(1)=="0";
 			if (invert) mustInvert = !mustInvert;
 			else attack();
@@ -161,7 +196,7 @@ public class flumptyModuleScript : MonoBehaviour
 	}
 
 	int convertFromBinary(string bin) => bin.ToCharArray().Reverse().Select((x,i)=>x=='1'?1<<i:0).Sum();
-	string moduleNameToCompatible(string name) {
+	static string moduleNameToCompatible(string name) {
 		string ans = name.ToUpperInvariant().Where(c => base36.Contains(c)).Aggregate("", (a, b) => a + b);
 		return ans == ""?"0":ans;
 		}
@@ -177,12 +212,14 @@ public class flumptyModuleScript : MonoBehaviour
 	{
 		moduleToHide.gameObject.transform.localScale = new Vector3(0, 0, 0);
 		transformDictionary[moduleToHide].localScale = new Vector3(1, 1, 1);
+		currentActive.Add(moduleToHide);
 	}
 	
 	void showModule(KMBombModule moduleToHide)
 	{
 		moduleToHide.gameObject.transform.localScale = new Vector3(1, 1, 1);
 		transformDictionary[moduleToHide].localScale = new Vector3(0, 0, 0);
+		currentActive.Remove(moduleToHide);
 	}
 
 	void addCandidate(KMBombModule module)
@@ -191,16 +228,38 @@ public class flumptyModuleScript : MonoBehaviour
 		hideModule(module);
 	}
 
+	IEnumerator die()
+	{
+		while (true)
+		{
+			GetComponent<KMBombModule>().HandleStrike();
+			yield return new WaitForSeconds(1f);
+		}
+	}
+	
+	public static bool IsSolved(KMBombModule module)
+	{
+		try
+		{
+			Type type = Type.GetType("ModBombComponent, Assembly-CSharp, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+			return (bool) type
+				.GetField("IsSolved", BindingFlags.Instance | BindingFlags.Public)
+				.GetValue(module.GetComponent("ModBombComponent"));
+		}
+		catch(Exception e) { print(e); return false; }
+	}
+
 	void Update()
 	{
-		if (allSolved.Count == bombInfo.GetSolvedModuleIDs().Count) return;
-		
-		KMBombModule solvedModule = Enumerable.Range(0, transform.parent.childCount)
+		if (bombInfo.GetSolvedModuleIDs().Count == stageNumber) return;
+		if (underAttack) StartCoroutine(die());
+		List<KMBombModule> solvedModules = Enumerable.Range(0, transform.parent.childCount)
 			.Select(x => transform.parent.GetChild(x).gameObject.GetComponent<KMBombModule>())
-			.Where(x => !allSolved.Contains(x) ).ToList()[0];
+			.Where(IsSolved).ToList();
+		print(solvedModules.Count);
+		KMBombModule solvedModule = solvedModules.First(x => !allSolved.Contains(x));
 		
-		allSolved.Add(solvedModule);
-		hideModule(solvedModule);
+		startStage(solvedModule);
 	}
 	
 }

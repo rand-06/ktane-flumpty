@@ -20,14 +20,15 @@ public class flumptyModuleInfo
     public string name;
     public int date;
     public int tpScore;
+    public string ptSymbol;
     
-    public flumptyModuleInfo(string id, string name, int date, int tpScore, int timeModeScore)
+    public flumptyModuleInfo(string id, string name, int date, int tpScore, string ptSymbol)
     {
         this.id = id;
         this.name = name;
         this.date = date;
         this.tpScore = tpScore;
-        this.timeModeScore = timeModeScore;
+        this.ptSymbol = ptSymbol;
     }
 }
 
@@ -37,7 +38,7 @@ public class flumptyServiceScript : MonoBehaviour { // успешно спизд
 
     public static List<flumptyModuleInfo> getModuleInfo() => SettingsLoaded ? modules : null;
     
-    static bool SettingsLoaded = false;
+    static bool SettingsLoaded;
 
     private string _settingsFile;
     private flumptySettings _settings;
@@ -109,9 +110,9 @@ public class flumptyServiceScript : MonoBehaviour { // успешно спизд
                 modules.Add(new flumptyModuleInfo(
                     module["ModuleID"].Value<string>(), 
                     module["Name"].Value<string>(), 
-                    int.Parse(module["Published"].Value<string>().Replace("-","")),
+                    int.Parse((module["Published"]==null?DateTime.Today.ToString("yyyy-MM-dd"):module["Published"]).Value<string>().Replace("-","")),
                     module["TwitchPlays"] == null? 0: module["TwitchPlays"]["Score"].Value<int>(),
-                    module["TimeMode"] == null? 0: module["TimeMode"]["Score"].Value<int>()));
+                    (module["Symbol"]==null?"0":module["Symbol"]).Value<string>()));
                 print("[flumptyService] Found module: " + module["Name"].Value<string>() + " ("+ module["ModuleID"].Value<string>()+")");
             }
 

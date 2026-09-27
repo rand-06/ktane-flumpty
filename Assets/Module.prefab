@@ -548,6 +548,7 @@ MonoBehaviour:
   IdNumberText: {fileID: 102037484548158132}
   blankPrefab: {fileID: 1790308375360328, guid: 3913add88f1c01340af022a05c57f1de,
     type: 2}
+  BombInfo: {fileID: 114708392791437952}
 --- !u!114 &114395207056365514
 MonoBehaviour:
   m_ObjectHideFlags: 1
